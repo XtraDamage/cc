@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CarCards</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* bg-gray-900 */
+            color: #f3f4f6; /* text-gray-100 */
+        }
+        .case-container {
+            transition: transform 0.2s ease-in-out;
+        }
+        .case-container:hover {
+            transform: scale(1.05);
+        }
+        .case-container:active {
+            transform: scale(0.98);
+        }
+        .card-reveal {
+            animation: reveal 0.8s cubic-bezier(0.250, 0.460, 0.450, 0.940) both;
+        }
+        .case-opening {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        .rarity-common { border-color: #9ca3af; box-shadow: 0 0 15px #9ca3af44; }
+        .rarity-uncommon { border-color: #22c55e; box-shadow: 0 0 15px #22c55e66; }
+        .rarity-rare { border-color: #3b82f6; box-shadow: 0 0 15px #3b82f666; }
+        .rarity-epic { border-color: #a855f7; box-shadow: 0 0 20px #a855f788; }
+        .rarity-legendary { border-color: #f97316; box-shadow: 0 0 25px #f9731699; }
+
+        .text-rarity-common { color: #9ca3af; }
+        .text-rarity-uncommon { color: #22c55e; }
+        .text-rarity-rare { color: #3b82f6; }
+        .text-rarity-epic { color: #a855f7; }
+        .text-rarity-legendary { color: #f97316; }
+
+        @keyframes reveal {
+            0% { transform: scale(0.5) rotateY(0); opacity: 0; }
+            50% { transform: scale(1.1) rotateY(180deg); opacity: 1; }
+            100% { transform: scale(1) rotateY(360deg); opacity: 1; }
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+        
+        .modal-backdrop {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.7); display: flex;
+            justify-content: center; align-items: center; z-index: 50;
+            backdrop-filter: blur(4px);
+        }
+        .btn {
+            padding: 8px 16px; border-radius: 8px; font-size: 14px;
+            font-weight: bold; margin-top: 8px; width: 100%;
+            transition: background-color 0.2s, transform 0.1s;
+            color: white; display: inline-flex; align-items: center; justify-content: center;
+        }
+        .btn:active {
+            transform: scale(0.97);
+        }
+        .btn-disabled {
+            background-color: #4b5563;
+            cursor: not-allowed;
+        }
+        .sell-btn { background-color: #ef4444; }
+        .sell-btn:hover { background-color: #dc2626; }
+        .upgrade-btn { background-color: #8b5cf6; }
+        .upgrade-btn:hover { background-color: #7c3aed; }
+
+        .collection-card.selected {
+            outline: 3px solid #a855f7;
+            box-shadow: 0 0 20px #a855f788;
+            transform: scale(1.05);
+        }
+        .collection-card-img-wrapper {
+            background-color: #ffffff;
+            border-radius: 0.375rem;
+            height: 6rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.25rem;
+            border: 1px solid #4b5563;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-4 sm:p-6 md:p-8">
+    
+    <div id="preloader" class="fixed inset-0 bg-gray-900 flex flex-col justify-center items-center z-50">
+        <div class="text-2xl font-bold text-white">Загрузка игры...</div>
+        <div class="w-32 h-1 bg-gray-700 rounded-full mt-4 overflow-hidden">
+            <div id="preloader-bar" class="h-full bg-purple-500 transition-all duration-300" style="width: 0%;"></div>
+        </div>
+    </div>
+
+    <div id="game-container" class="w-full max-w-5xl mx-auto hidden">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white">
+                <span class="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">CarCards</span>
+            </h1>
+            <div id="stats-container" class="mt-6 text-xl bg-gray-800/50 rounded-lg px-6 py-3 inline-block border border-gray-700">
+                <div class="font-bold">Баланс: <span id="balance-amount">1000</span>$</div>
+                <div class="font-bold text-gray-300 mt-1">Гайки: <span id="nuts-amount">0</span> ⬡</div>
+                <div class="font-bold text-green-400 mt-1">Доход: <span id="income-per-second">0</span>$/с</div>
+            </div>
+        </header>
+
+        <main class="text-center mb-12">
+            <div id="case-area" class="flex flex-col items-center justify-center min-h-[350px]">
+                <div id="case-opener">
+                    <h2 class="text-2xl font-semibold mb-4">Кейс</h2>
+                    <div id="open-case-button-container" class="cursor-pointer case-container">
+                        <img id="case-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 150'%3E%3Cpath d='M20,25 A15,15 0 0,1 35,10 H165 A15,15 0 0,1 180,25 V125 A15,15 0 0,1 165,140 H35 A15,15 0 0,1 20,125 Z' fill='%23374151' stroke='%236b7280' stroke-width='3'/%3E%3Cpath d='M20,75 H180' stroke='%236b7280' stroke-width='3'/%3E%3Crect x='90' y='65' width='20' height='20' rx='5' fill='%231f2937' stroke='%239ca3af' stroke-width='2'/%3E%3C/svg%3E" alt="[Кейс]" class="w-[250px] h-[187px]">
+                    </div>
+                    <div id="case-controls" class="mt-4 w-full max-w-[250px]">
+                        <button id="open-case-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg text-lg transition-all duration-200 shadow-md hover:shadow-blue-500/50">
+                            Открыть за 250$
+                        </button>
+                    </div>
+                </div>
+                <div id="card-display" class="hidden w-full max-w-sm">
+                </div>
+            </div>
+        </main>
+        
+        <footer class="bg-gray-800/50 p-4 sm:p-6 rounded-xl border border-gray-700">
+            <h3 class="text-2xl font-bold text-center mb-4">Моя Коллекция</h3>
+            <div id="collection-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 min-h-[150px]">
+                <p id="empty-collection-message" class="col-span-full text-center text-gray-400">Ваша коллекция пока пуста. Откройте свой первый кейс!</p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- General Message Modal -->
+    <div id="message-modal" class="modal-backdrop hidden">
+        <div class="bg-gray-800 rounded-lg shadow-xl p-6 w-11/12 max-w-sm text-center border border-gray-600">
+            <p id="modal-message-text" class="text-lg mb-4"></p>
+            <button id="modal-close-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg">OK</button>
+        </div>
+    </div>
+
+    <!-- Detailed Card Info Modal -->
+    <div id="card-info-modal" class="modal-backdrop hidden">
+        <div id="card-info-content" class="bg-gray-800 rounded-lg shadow-xl w-11/12 max-w-md text-center border border-gray-600 relative p-6">
+            <!-- Content will be injected by JS -->
+        </div>
+    </div>
+
+
+    <script type="module">
+        // --- Game Data ---
+        const CARS = [
+            { name: "Lada Granta", rarity: "Обычная", cost: 50, desc: "Надежный и доступный седан.", img: "https://raw.githubusercontent.com/CarCards/game/refs/heads/main/ladagrante.jpg" },
+            { name: "Renault Logan", rarity: "Обычная", cost: 60, desc: "Проверенный временем автомобиль.", img: "https://raw.githubusercontent.com/CarCards/game/refs/heads/main/Renault%20Logan.jpg" },
+            { name: "Daewoo Matiz", rarity: "Обычная", cost: 40, desc: "Компактный и экономичный.", img: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT4ldUoB8VNzfuiBI1lPMiyk8q93gkxyGAEtg&s" },
+            { name: "Toyota Camry", rarity: "Необычная", cost: 200, desc: "Популярный бизнес-седан.", img: "https://raw.githubusercontent.com/CarCards/game/refs/heads/main/Toyota%20Camry%20XV50.jpg" },
+            { name: "Kia K5", rarity: "Необычная", cost: 220, desc: "Стильный и технологичный седан.", img: "https://raw.githubusercontent.com/CarCards/game/refs/heads/main/kia%20k5.jpg" },
+            { name: "Volkswagen Polo", rarity: "Необычная", cost: 180, desc: "Немецкое качество в компактном кузове.", img: "https://s.auto.drom.ru/i24218/m/bull_image_stub/default_03b0e6517cdc69c5263f90b1ba4b3127.jpg" },
+            { name: "Ford Mustang", rarity: "Редкая", cost: 500, desc: "Легендарный американский маслкар.", img: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTbuE1OdoT_O4Fzr5zDBZkpA03WMg5ISiANxg&s" },
+            { name: "BMW M3", rarity: "Редкая", cost: 650, desc: "Спортивный седан, эталон управляемости.", img: "https://raw.githubusercontent.com/CarCards/game/refs/heads/main/Bmw%20330e.jpg" },
+            { name: "Porsche 911", rarity: "Эпическая", cost: 1500, desc: "Икона спортивного автомобилестроения.", img: "https://raw.githubusercontent.com/CarCards/game/refs/heads/main/porshe911.jpg" },
+            { name: "Nissan GT-R", rarity: "Эпическая", cost: 1300, desc: "Годзилла из Японии.", img: "https://raw.githubusercontent.com/CarCards/game/refs/heads/main/nissanGTR.jpg" },
+            { name: "Bugatti Chiron", rarity: "Легендарная", cost: 5000, desc: "Вершина инженерной мысли и роскоши.", img: "https://raw.githubusercontent.com/CarCards/game/refs/heads/main/Bugatti.jpg" },
+        ];
+
+        const RARITY_CONFIG = {
+            "Обычная":    { colorClass: "rarity-common",    textClass: "text-rarity-common",    weight: 60, income: 1,  upgradeBonus: 1 },
+            "Необычная":  { colorClass: "rarity-uncommon",  textClass: "text-rarity-uncommon",  weight: 25, income: 5,  upgradeBonus: 3 },
+            "Редкая":     { colorClass: "rarity-rare",      textClass: "text-rarity-rare",      weight: 10, income: 20, upgradeBonus: 10 },
+            "Эпическая":  { colorClass: "rarity-epic",      textClass: "text-rarity-epic",      weight: 4,  income: 75, upgradeBonus: 40 },
+            "Легендарная":{ colorClass: "rarity-legendary", textClass: "text-rarity-legendary", weight: 1,  income: 250,upgradeBonus: 150 },
+        };
+        const SELL_MULTIPLIER = 0.7;
+        const SAVE_KEY = 'carCardsSaveData_v9'; // Changed save key version
+        const CASE_COST = 250;
+
+        // --- Player State ---
+        let playerBalance = 1000;
+        let playerNuts = 0;
+        let playerCollection = {};
+        let selectedCarName = null;
+        let isOpening = false;
+        let totalIncomePerSecond = 0;
+
+        // --- DOM Elements ---
+        const balanceAmountEl = document.getElementById('balance-amount');
+        const nutsAmountEl = document.getElementById('nuts-amount');
+        const incomePerSecondEl = document.getElementById('income-per-second');
+        const caseImage = document.getElementById('case-image');
+        const caseOpener = document.getElementById('case-opener');
+        const cardDisplay = document.getElementById('card-display');
+        const collectionGrid = document.getElementById('collection-grid');
+        const emptyCollectionMessage = document.getElementById('empty-collection-message');
+        const openCaseButton = document.getElementById('open-case-button');
+        const messageModal = document.getElementById('message-modal');
+        const modalMessageText = document.getElementById('modal-message-text');
+        const modalCloseButton = document.getElementById('modal-close-button');
+        const cardInfoModal = document.getElementById('card-info-modal');
+        const cardInfoContent = document.getElementById('card-info-content');
+
+        // --- Game Logic ---
+        
+        function saveGame() {
+            try {
+                const gameState = {
+                    balance: playerBalance,
+                    collection: playerCollection,
+                    nuts: playerNuts,
+                };
+                localStorage.setItem(SAVE_KEY, JSON.stringify(gameState));
+            } catch (error) {
+                console.error("Failed to save game state:", error);
+            }
+        }
+
+        function loadGame() {
+            try {
+                const savedData = localStorage.getItem(SAVE_KEY);
+                if (savedData) {
+                    const gameState = JSON.parse(savedData);
+                    playerBalance = gameState.balance || 1000;
+                    playerNuts = gameState.nuts || 0;
+                    const loadedCollection = gameState.collection || {};
+                    Object.values(loadedCollection).forEach(car => {
+                        if (car.level === undefined) car.level = 0;
+                        if (car.dateAcquired === undefined) car.dateAcquired = new Date().toISOString();
+                    });
+                    playerCollection = loadedCollection;
+                }
+            } catch (error)
+            {
+                console.error("Failed to load game state:", error);
+                playerBalance = 1000;
+                playerNuts = 0;
+                playerCollection = {};
+            }
+        }
+
+        function showMessage(message) {
+            modalMessageText.textContent = message;
+            messageModal.classList.remove('hidden');
+        }
+
+        function updateStats() {
+            balanceAmountEl.textContent = Math.floor(playerBalance);
+            nutsAmountEl.textContent = playerNuts;
+            incomePerSecondEl.textContent = totalIncomePerSecond;
+        }
+        
+        function getCarIncome(car) {
+            const config = RARITY_CONFIG[car.rarity];
+            const baseIncome = config?.income || 0;
+            const upgradeBonus = config?.upgradeBonus || 0;
+            const totalCarIncome = (baseIncome + (car.level * upgradeBonus)) * car.count;
+            return totalCarIncome;
+        }
+
+        function calculateTotalIncome() {
+            let totalIncome = 0;
+            for (const carName in playerCollection) {
+                totalIncome += getCarIncome(playerCollection[carName]);
+            }
+            totalIncomePerSecond = totalIncome;
+            return totalIncome;
+        }
+
+        function getRandomCar() {
+            const weightedList = [];
+            CARS.forEach(car => {
+                const weight = RARITY_CONFIG[car.rarity].weight;
+                for (let i = 0; i < weight; i++) {
+                    weightedList.push(car);
+                }
+            });
+            const randomIndex = Math.floor(Math.random() * weightedList.length);
+            return weightedList[randomIndex];
+        }
+        
+        function createCollectionCardHTML(car) {
+             const config = RARITY_CONFIG[car.rarity];
+             return `
+                <div class="collection-card bg-gray-800 rounded-lg p-2 border-2 ${config.colorClass} flex flex-col justify-between cursor-pointer transform transition-all duration-200" data-name="${car.name}">
+                    <div class="collection-card-img-wrapper">
+                        <img src="${car.img}" alt="[Изображение ${car.name}]" class="max-w-full max-h-full object-contain" onerror="this.onerror=null;this.src='https://placehold.co/600x400/1f2937/f3f4f6?text=Error';">
+                    </div>
+                    <div>
+                        <p class="text-sm font-semibold mt-2 truncate text-white">${car.name}</p>
+                        <p class="text-xs ${config.textClass}">Ур. ${car.level} (x${car.count})</p>
+                    </div>
+                </div>
+             `;
+        }
+
+        function updateCollection() {
+            if (Object.keys(playerCollection).length > 0) {
+                emptyCollectionMessage.classList.add('hidden');
+                collectionGrid.innerHTML = Object.values(playerCollection).sort((a, b) => {
+                    const rarityA = Object.keys(RARITY_CONFIG).indexOf(a.rarity);
+                    const rarityB = Object.keys(RARITY_CONFIG).indexOf(b.rarity);
+                    if (rarityB !== rarityA) {
+                        return rarityB - rarityA;
+                    }
+                    return b.cost - a.cost;
+                }).map(createCollectionCardHTML).join('');
+
+            } else {
+                emptyCollectionMessage.classList.remove('hidden');
+                collectionGrid.innerHTML = '';
+            }
+            if (selectedCarName && playerCollection[selectedCarName]) {
+                 const cardEl = collectionGrid.querySelector(`.collection-card[data-name="${selectedCarName}"]`);
+                 if (cardEl) cardEl.classList.add('selected');
+            }
+            calculateTotalIncome();
+            updateStats();
+        }
+        
+        function handleCollectionClick(event) {
+            const card = event.target.closest('.collection-card');
+            if (!card) return;
+
+            const cardName = card.dataset.name;
+
+            if (selectedCarName === cardName) {
+                showDetailedInfo(cardName);
+            } else {
+                if (selectedCarName) {
+                    const oldCard = collectionGrid.querySelector(`.collection-card[data-name="${selectedCarName}"]`);
+                    if(oldCard) oldCard.classList.remove('selected');
+                }
+                card.classList.add('selected');
+                selectedCarName = cardName;
+            }
+        }
+
+        function deselectCard() {
+            if (selectedCarName) {
+                const oldCard = collectionGrid.querySelector(`.collection-card.selected`);
+                if (oldCard) {
+                    oldCard.classList.remove('selected');
+                }
+                selectedCarName = null;
+            }
+        }
+
+        function showDetailedInfo(cardName) {
+            const car = playerCollection[cardName];
+            if (!car) return;
+
+            const config = RARITY_CONFIG[car.rarity];
+            const sellPrice = Math.floor(car.cost * SELL_MULTIPLIER);
+            const upgradeCost = 1 + car.level;
+            const carIncome = getCarIncome(car) / car.count; // Income per single car
+            const date = new Date(car.dateAcquired);
+            const formattedDate = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+            cardInfoContent.innerHTML = `
+                <button id="info-modal-close" class="absolute top-2 right-3 text-gray-400 hover:text-white text-2xl font-bold">&times;</button>
+                <div class="w-full h-48 flex justify-center items-center bg-white rounded-md mb-4 p-2 border border-gray-600">
+                    <img src="${car.img}" class="max-w-full max-h-full object-contain" onerror="this.onerror=null;this.src='https://placehold.co/600x400/1f2937/f3f4f6?text=Error';">
+                </div>
+                <h4 class="text-2xl font-bold">${car.name} (x${car.count})</h4>
+                <p class="font-semibold ${config.textClass}">${car.rarity} (Уровень ${car.level})</p>
+                <p class="text-sm text-gray-300 my-3">${car.desc}</p>
+                 <div class="text-left bg-gray-900/50 p-3 rounded-lg space-y-1">
+                    <p><strong>Пассивный доход:</strong> ${carIncome}$/с (за 1 шт.)</p>
+                    <p><strong>Дата получения:</strong> ${formattedDate}</p>
+                </div>
+                <div class="mt-4 grid grid-cols-2 gap-3">
+                    <button class="btn upgrade-btn" id="modal-upgrade-btn">Прокачать за ${upgradeCost} ⬡</button>
+                    <button class="btn sell-btn" id="modal-sell-btn">Продать за ${sellPrice}$</button>
+                </div>
+            `;
+            cardInfoModal.classList.remove('hidden');
+
+            document.getElementById('info-modal-close').addEventListener('click', () => cardInfoModal.classList.add('hidden'));
+            document.getElementById('modal-upgrade-btn').addEventListener('click', () => handleUpgradeCar(cardName));
+            document.getElementById('modal-sell-btn').addEventListener('click', () => handleSellCar(cardName));
+        }
+
+        function handleUpgradeCar(cardName) {
+            const car = playerCollection[cardName];
+            if (!car) return;
+            const upgradeCost = 1 + car.level;
+            if (playerNuts >= upgradeCost) {
+                playerNuts -= upgradeCost;
+                car.level++;
+                updateCollection(); // Recalculates income
+                showDetailedInfo(cardName);
+                saveGame();
+            } else {
+                showMessage("Недостаточно гаек!");
+            }
+        }
+
+        function handleSellCar(cardName) {
+            const car = playerCollection[cardName];
+            if (!car) return;
+            const sellPrice = Math.floor(car.cost * SELL_MULTIPLIER);
+            playerBalance += sellPrice;
+            car.count--;
+
+            if (car.count === 0) {
+                delete playerCollection[cardName];
+                selectedCarName = null;
+                cardInfoModal.classList.add('hidden');
+            }
+            
+            updateCollection(); // Recalculates income
+            if (car.count > 0) {
+                showDetailedInfo(cardName);
+            }
+            saveGame();
+        }
+
+        function handleOpenCase() {
+            if (isOpening) return;
+            
+            if (playerBalance < CASE_COST) {
+                showMessage("Недостаточно денег для открытия кейса!");
+                return;
+            }
+
+            isOpening = true;
+            playerBalance -= CASE_COST;
+            updateStats(); // Update stats right after purchase
+
+            caseImage.classList.add('case-opening');
+
+            setTimeout(() => {
+                const wonCarData = getRandomCar();
+                
+                if (playerCollection[wonCarData.name]) {
+                    playerCollection[wonCarData.name].count++;
+                } else {
+                    playerCollection[wonCarData.name] = { ...wonCarData, count: 1, level: 0, dateAcquired: new Date().toISOString() };
+                }
+
+                caseOpener.classList.add('hidden');
+                const cardHTML = `
+                    <div class="card-reveal bg-gray-800 rounded-lg p-4 border-2 ${RARITY_CONFIG[wonCarData.rarity].colorClass} w-full">
+                        <div class="w-full h-48 flex justify-center items-center bg-white rounded-md mb-4 p-2 border border-gray-600">
+                            <img src="${wonCarData.img}" alt="[Изображение ${wonCarData.name}]" class="max-w-full max-h-full object-contain" onerror="this.onerror=null;this.src='https://placehold.co/600x400/1f2937/f3f4f6?text=Error';">
+                        </div>
+                        <h4 class="text-xl font-bold">${wonCarData.name}</h4>
+                        <p class="font-semibold ${RARITY_CONFIG[wonCarData.rarity].textClass}">${wonCarData.rarity}</p>
+                    </div>
+                `;
+                cardDisplay.innerHTML = cardHTML;
+                cardDisplay.classList.remove('hidden');
+                
+                caseImage.classList.remove('case-opening');
+
+                setTimeout(() => {
+                    isOpening = false;
+                    caseOpener.classList.remove('hidden');
+                    cardDisplay.classList.add('hidden');
+                    updateCollection();
+                    saveGame();
+                }, 3000);
+            }, 500); // Wait for shake animation to finish
+        }
+
+        function preloadImages() {
+            const preloaderBar = document.getElementById('preloader-bar');
+            let loadedCount = 0;
+            const totalImages = CARS.length;
+
+            if (totalImages === 0) {
+                document.getElementById('preloader').classList.add('hidden');
+                document.getElementById('game-container').classList.remove('hidden');
+                return;
+            }
+
+            CARS.forEach(car => {
+                const img = new Image();
+                img.src = car.img;
+                const onFinish = () => {
+                    loadedCount++;
+                    preloaderBar.style.width = `${(loadedCount / totalImages) * 100}%`;
+                    if (loadedCount === totalImages) {
+                        setTimeout(() => {
+                            document.getElementById('preloader').classList.add('hidden');
+                            document.getElementById('game-container').classList.remove('hidden');
+                        }, 200);
+                    }
+                };
+                img.onload = onFinish;
+                img.onerror = onFinish; 
+            });
+        }
+
+        // --- Game Loop ---
+        function gameLoop() {
+            const income = calculateTotalIncome();
+            playerBalance += income;
+            updateStats();
+        }
+
+        function init() {
+            preloadImages();
+            loadGame();
+            updateCollection(); // Initial calculation and display
+
+            // Game loop for passive income
+            setInterval(gameLoop, 1000);
+
+            // Save periodically
+            setInterval(saveGame, 5000);
+
+            // Event Listeners
+            openCaseButton.addEventListener('click', handleOpenCase);
+            collectionGrid.addEventListener('click', handleCollectionClick);
+            modalCloseButton.addEventListener('click', () => messageModal.classList.add('hidden'));
+            
+            document.body.addEventListener('click', (e) => {
+                if (e.target === cardInfoModal) {
+                    cardInfoModal.classList.add('hidden');
+                }
+                if (!e.target.closest('.collection-card') && !e.target.closest('#card-info-modal')) {
+                    deselectCard();
+                }
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>
